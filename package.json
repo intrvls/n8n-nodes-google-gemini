@@ -1,6 +1,9 @@
 {
-  "name": "n8n-nodes-google-gemini-genai",
+  "name": "@intrvls/n8n-nodes-google-gemini",
   "version": "1.0.0-alpha.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "n8n community node for the Google Gemini Chat Model, built on @intrvls/langchain-google-genai (the @google/genai-based port of @langchain/google-genai)",
   "keywords": [
     "n8n-community-node-package",

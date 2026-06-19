@@ -1,6 +1,6 @@
-# n8n-nodes-google-gemini-genai
+# @intrvls/n8n-nodes-google-gemini
 
-[![npm version](https://img.shields.io/npm/v/n8n-nodes-google-gemini-genai.svg)](https://www.npmjs.com/package/n8n-nodes-google-gemini-genai)
+[![npm version](https://img.shields.io/npm/v/@intrvls/n8n-nodes-google-gemini.svg)](https://www.npmjs.com/package/@intrvls/n8n-nodes-google-gemini)
 
 An n8n community node that exposes a **Google Gemini Chat Model** as an AI Language Model sub-node, built on
 [`@intrvls/langchain-google-genai`](https://www.npmjs.com/package/@intrvls/langchain-google-genai) — the standalone port of
@@ -30,7 +30,7 @@ installation and wired to the port instead of the upstream LangChain package.
 
 ## Installation
 
-In n8n: **Settings → Community Nodes → Install**, then enter `n8n-nodes-google-gemini-genai`.
+In n8n: **Settings → Community Nodes → Install**, then enter `@intrvls/n8n-nodes-google-gemini`.
 
 ## Compatibility
 
