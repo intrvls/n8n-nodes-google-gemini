@@ -1,0 +1,59 @@
+{
+  "name": "n8n-nodes-google-gemini-genai",
+  "version": "1.0.0",
+  "description": "n8n community node for the Google Gemini Chat Model, built on @intrvls/langchain-google-genai (the @google/genai-based port of @langchain/google-genai)",
+  "keywords": [
+    "n8n-community-node-package",
+    "n8n",
+    "google",
+    "gemini",
+    "genai",
+    "langchain",
+    "llm"
+  ],
+  "license": "MIT",
+  "author": "Ervin Chai <ervin.chai1108@gmail.com>",
+  "homepage": "https://github.com/intrvls/n8n-nodes-google-gemini#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/intrvls/n8n-nodes-google-gemini.git"
+  },
+  "bugs": {
+    "url": "https://github.com/intrvls/n8n-nodes-google-gemini/issues"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc && gulp build:icons",
+    "dev": "tsc --watch",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist"
+  ],
+  "n8n": {
+    "n8nNodesApiVersion": 1,
+    "credentials": [
+      "dist/credentials/GooglePalmApi.credentials.js"
+    ],
+    "nodes": [
+      "dist/nodes/LmChatGoogleGemini/LmChatGoogleGemini.node.js"
+    ]
+  },
+  "dependencies": {
+    "@google/genai": "^2.8.0",
+    "@intrvls/langchain-google-genai": "^3.0.0-alpha.0"
+  },
+  "peerDependencies": {
+    "@langchain/core": "^1.1.30",
+    "n8n-workflow": "*"
+  },
+  "devDependencies": {
+    "@langchain/core": "^1.1.41",
+    "gulp": "^5.0.1",
+    "n8n-workflow": "^1.120.17",
+    "typescript": "~5.8.0"
+  }
+}
