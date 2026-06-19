@@ -14,10 +14,16 @@ installation and wired to the port instead of the upstream LangChain package.
 
 - Outputs an `ai_languageModel` connection — drop it onto any **AI Agent** or **Chain** node.
 - **Model selector** populated live from the Gemini API (`GET /v1beta/models`), filtering out embedding/imagen models
-  and sorting alphabetically.
+  **and anything older than Gemini 2.5** (1.x, 2.0, and unversioned aliases), sorted alphabetically.
 - Node **versions `1` and `1.1`** with version-appropriate default models
   (`models/gemini-2.5-flash` for v1, `models/gemini-3-flash-preview` for v1.1+).
-- **Options**: maximum output tokens, sampling temperature, top-K, top-P.
+- **Thinking / reasoning controls**:
+  - **Thinking Level** (`Minimal` / `Low` / `Medium` / `High`) — the reasoning-effort knob for **Gemini 3+**.
+  - **Thinking Budget** (token integer; `-1` dynamic, `0` off) — the equivalent control for **Gemini 2.5**.
+  - **Include Thoughts** — return the model's thought summaries when available.
+  - These are sent as `thinkingConfig` and omitted entirely when unset (the API rejects them on non-thinking models).
+- **Options**: maximum output tokens, sampling temperature, top-K, top-P, stop sequences (up to 5),
+  maximum retries, and JSON-only output.
 - **Safety settings** (`fixedCollection`): per-`HarmCategory` block thresholds, mapped to `@google/genai`'s
   `HarmCategory` / `HarmBlockThreshold` enums.
 - Uses the standard `googlePalmApi` credential (API key + host).

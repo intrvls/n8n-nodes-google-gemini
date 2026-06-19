@@ -1,6 +1,12 @@
 import { ChatGoogleGenerativeAI } from '@intrvls/langchain-google-genai';
+import type { GoogleGenerativeAIChatInput } from '@intrvls/langchain-google-genai';
 import type { SafetySetting } from '@google/genai';
 import { HarmBlockThreshold, HarmCategory } from '@google/genai';
+
+// The thinking types aren't exported from the library, so derive them from the
+// exported constructor-input interface to stay in sync with the upstream shape.
+type ThinkingConfig = NonNullable<GoogleGenerativeAIChatInput['thinkingConfig']>;
+type ThinkingLevel = NonNullable<ThinkingConfig['thinkingLevel']>;
 import {
 	NodeConnectionTypes,
 	type INodeType,
@@ -105,8 +111,10 @@ export class LmChatGoogleGemini implements INodeType {
 									{
 										type: 'filter',
 										properties: {
-											// Exclude embedding and image-generation only models.
-											pass: "={{ !$responseItem.name.includes('embedding') && !$responseItem.name.includes('imagen') }}",
+											// Exclude embedding/image-generation models, and anything
+											// older than Gemini 2.5 (1.x, 2.0, and unversioned aliases).
+											// Keeps gemini-2.5* and gemini-3+ (and future major versions).
+											pass: "={{ /gemini-(2\\.5|[3-9]|\\d\\d)/.test($responseItem.name) && !$responseItem.name.includes('embedding') && !$responseItem.name.includes('imagen') }}",
 										},
 									},
 									{
@@ -165,7 +173,8 @@ export class LmChatGoogleGemini implements INodeType {
 									{
 										type: 'filter',
 										properties: {
-											pass: "={{ !$responseItem.name.includes('embedding') && !$responseItem.name.includes('imagen') }}",
+											// Same 2.5+ floor as the v1 model field above.
+											pass: "={{ /gemini-(2\\.5|[3-9]|\\d\\d)/.test($responseItem.name) && !$responseItem.name.includes('embedding') && !$responseItem.name.includes('imagen') }}",
 										},
 									},
 									{
@@ -244,6 +253,64 @@ export class LmChatGoogleGemini implements INodeType {
 						description:
 							'Used to set the cumulative probability cutoff for token selection. Lower values mean sampling from a smaller, more top-weighted nucleus.',
 						type: 'number',
+					},
+					{
+						displayName: 'Thinking Level',
+						name: 'thinkingLevel',
+						type: 'options',
+						default: 'HIGH',
+						description:
+							'Reasoning effort for Gemini 3+ models. Higher levels let the model spend more tokens thinking before it answers. Ignored by models that do not support thinking.',
+						options: [
+							{ name: 'Minimal', value: 'MINIMAL' },
+							{ name: 'Low', value: 'LOW' },
+							{ name: 'Medium', value: 'MEDIUM' },
+							{ name: 'High', value: 'HIGH' },
+						],
+					},
+					{
+						displayName: 'Thinking Budget',
+						name: 'thinkingBudget',
+						type: 'number',
+						default: -1,
+						typeOptions: { minValue: -1 },
+						description:
+							'Gemini 2.5 only — number of tokens the model may spend thinking. Use -1 for a dynamic budget, or 0 to disable thinking. Gemini 3+ models use Thinking Level instead.',
+					},
+					{
+						displayName: 'Include Thoughts',
+						name: 'includeThoughts',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to return thought summaries from the model in the response, when available',
+					},
+					{
+						displayName: 'Stop Sequences',
+						name: 'stopSequences',
+						type: 'string',
+						typeOptions: { multipleValues: true },
+						default: [],
+						placeholder: 'Add Stop Sequence',
+						description:
+							'Up to 5 character sequences that stop output generation. A stop sequence is not included in the response.',
+					},
+					{
+						displayName: 'Maximum Retries',
+						name: 'maxRetries',
+						type: 'number',
+						default: 2,
+						typeOptions: { minValue: 0 },
+						description:
+							'Number of times to retry the request on a transient error (rate limits or 5xx) before failing',
+					},
+					{
+						displayName: 'JSON Output',
+						name: 'json',
+						type: 'boolean',
+						default: false,
+						description:
+							'Whether to force the model to respond with valid JSON. Supported by Gemini 2.5+ models.',
 					},
 					// Safety settings
 					{
@@ -332,6 +399,12 @@ export class LmChatGoogleGemini implements INodeType {
 			temperature?: number;
 			topK?: number;
 			topP?: number;
+			stopSequences?: string[];
+			maxRetries?: number;
+			json?: boolean;
+			thinkingLevel?: ThinkingLevel;
+			thinkingBudget?: number;
+			includeThoughts?: boolean;
 			safetySettings?: {
 				values?: Array<{ category: HarmCategory; threshold: HarmBlockThreshold }>;
 			};
@@ -344,6 +417,15 @@ export class LmChatGoogleGemini implements INodeType {
 			}),
 		);
 
+		// Assemble thinkingConfig from only the keys the user actually set. The API
+		// rejects thinkingConfig on models that don't support thinking, so it is
+		// omitted entirely when empty.
+		const thinkingConfig: ThinkingConfig = {};
+		if (options.thinkingLevel) thinkingConfig.thinkingLevel = options.thinkingLevel;
+		if (options.thinkingBudget !== undefined) thinkingConfig.thinkingBudget = options.thinkingBudget;
+		if (options.includeThoughts !== undefined) thinkingConfig.includeThoughts = options.includeThoughts;
+		const hasThinkingConfig = Object.keys(thinkingConfig).length > 0;
+
 		const model = new ChatGoogleGenerativeAI({
 			apiKey: credentials.apiKey as string,
 			baseUrl: credentials.host as string,
@@ -352,7 +434,11 @@ export class LmChatGoogleGemini implements INodeType {
 			topP: options.topP,
 			temperature: options.temperature,
 			maxOutputTokens: options.maxOutputTokens,
+			maxRetries: options.maxRetries,
+			stopSequences: options.stopSequences,
+			json: options.json,
 			safetySettings,
+			...(hasThinkingConfig ? { thinkingConfig } : {}),
 		});
 
 		return {
