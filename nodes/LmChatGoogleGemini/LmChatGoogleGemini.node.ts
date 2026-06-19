@@ -15,6 +15,7 @@ import {
 	type SupplyData,
 	type INodeProperties,
 } from 'n8n-workflow';
+import { N8nLlmTracing } from '@n8n/ai-utilities';
 
 const DEFAULT_MODEL_V1 = 'models/gemini-2.5-flash';
 const DEFAULT_MODEL_V11 = 'models/gemini-3-flash-preview';
@@ -439,6 +440,7 @@ export class LmChatGoogleGemini implements INodeType {
 			json: options.json,
 			safetySettings,
 			...(hasThinkingConfig ? { thinkingConfig } : {}),
+			callbacks: [new N8nLlmTracing(this)],
 		});
 
 		return {

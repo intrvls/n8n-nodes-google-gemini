@@ -51,10 +51,12 @@
   },
   "peerDependencies": {
     "@langchain/core": "^1.1.30",
+    "@n8n/ai-utilities": "*",
     "n8n-workflow": "*"
   },
   "devDependencies": {
     "@langchain/core": "^1.1.41",
+    "@n8n/ai-utilities": "^0.19.1",
     "gulp": "^5.0.1",
     "n8n-workflow": "^1.120.17",
     "typescript": "~5.8.0"
