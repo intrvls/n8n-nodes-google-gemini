@@ -39,16 +39,16 @@ const connectionHintNotice: INodeProperties = {
 
 export class LmChatGoogleGemini implements INodeType {
 	description: INodeTypeDescription = {
-		displayName: 'Google Gemini Chat Model',
+		displayName: 'Google Gemini Chat Model (@google/gen-ai)',
 		// Keeps backwards compatibility: the node was first published under
 		// this name, so it must not be changed.
 		name: 'lmChatGoogleGemini',
 		icon: 'file:google.svg',
 		group: ['transform'],
 		version: [1, 1.1],
-		description: 'Chat Model Google Gemini',
+		description: 'Use Google Gemini chat models via the Gemini API. This is a community port using the @google/genai SDK.',
 		defaults: {
-			name: 'Google Gemini Chat Model',
+			name: 'Google Gemini Chat Model (@google/gen-ai)',
 		},
 		codex: {
 			categories: ['AI'],
