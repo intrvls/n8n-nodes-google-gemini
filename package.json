@@ -42,7 +42,8 @@
       "dist/credentials/GooglePalmApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/LmChatGoogleGemini/LmChatGoogleGemini.node.js"
+      "dist/nodes/LmChatGoogleGemini/LmChatGoogleGemini.node.js",
+      "dist/nodes/GoogleGeminiTools/GoogleGeminiTool.node.js"
     ]
   },
   "dependencies": {
