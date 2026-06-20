@@ -1,6 +1,9 @@
 import { ChatGoogleGenerativeAI } from '@intrvls/langchain-google-genai';
-import type { GoogleGenerativeAIChatInput } from '@intrvls/langchain-google-genai';
-import type { SafetySetting } from '@google/genai';
+import type {
+	GoogleGenerativeAIChatInput,
+	GoogleGenerativeAIChatCallOptions,
+} from '@intrvls/langchain-google-genai';
+import type { SafetySetting, Schema } from '@google/genai';
 import { HarmBlockThreshold, HarmCategory } from '@google/genai';
 
 // The thinking types aren't exported from the library, so derive them from the
@@ -9,6 +12,7 @@ type ThinkingConfig = NonNullable<GoogleGenerativeAIChatInput['thinkingConfig']>
 type ThinkingLevel = NonNullable<ThinkingConfig['thinkingLevel']>;
 import {
 	NodeConnectionTypes,
+	NodeOperationError,
 	type INodeType,
 	type INodeTypeDescription,
 	type ISupplyDataFunctions,
@@ -16,6 +20,41 @@ import {
 	type INodeProperties,
 } from 'n8n-workflow';
 import { N8nLlmTracing } from '@n8n/ai-utilities';
+
+/**
+ * Thin subclass that bakes a `responseSchema` into every request as a default
+ * call option.
+ *
+ * `responseSchema` is only a per-call option upstream (not a constructor field),
+ * so the usual `model.withConfig({ responseSchema })` returns a RunnableBinding
+ * — which loses `.bindTools()` and therefore breaks tool-calling Agents. By
+ * overriding `invocationParams` we keep the supplied object a real
+ * `ChatGoogleGenerativeAI` (instanceof intact, `bindTools` available) while
+ * still forwarding the schema on every call. A schema passed explicitly at call
+ * time still wins over the default.
+ */
+class ChatGoogleGenerativeAIWithSchema extends ChatGoogleGenerativeAI {
+	private readonly defaultResponseSchema?: Schema;
+
+	constructor(
+		fields: GoogleGenerativeAIChatInput & { apiKey?: string },
+		defaultResponseSchema?: Schema,
+	) {
+		super(fields);
+		this.defaultResponseSchema = defaultResponseSchema;
+	}
+
+	invocationParams(
+		options?: this['ParsedCallOptions'],
+	): ReturnType<ChatGoogleGenerativeAI['invocationParams']> {
+		return super.invocationParams({
+			...(options as GoogleGenerativeAIChatCallOptions),
+			responseSchema:
+				(options as GoogleGenerativeAIChatCallOptions | undefined)?.responseSchema ??
+				this.defaultResponseSchema,
+		} as this['ParsedCallOptions']);
+	}
+}
 
 const DEFAULT_MODEL_V1 = 'models/gemini-2.5-flash';
 const DEFAULT_MODEL_V11 = 'models/gemini-3-flash-preview';
@@ -313,6 +352,14 @@ export class LmChatGoogleGemini implements INodeType {
 						description:
 							'Whether to force the model to respond with valid JSON. Supported by Gemini 2.5+ models.',
 					},
+					{
+						displayName: 'Response JSON Schema',
+						name: 'responseSchema',
+						type: 'json',
+						default: '',
+						description:
+							'Constrain output to this schema, expressed as a Gemini Schema (OpenAPI subset), e.g. {"type":"OBJECT","properties":{"name":{"type":"STRING"}},"required":["name"]}. Implies JSON output and is applied to every request, including tool-calling Agents. Gemini 2.5+ only.',
+					},
 					// Safety settings
 					{
 						displayName: 'Safety Settings',
@@ -403,6 +450,7 @@ export class LmChatGoogleGemini implements INodeType {
 			stopSequences?: string[];
 			maxRetries?: number;
 			json?: boolean;
+			responseSchema?: string;
 			thinkingLevel?: ThinkingLevel;
 			thinkingBudget?: number;
 			includeThoughts?: boolean;
@@ -427,7 +475,22 @@ export class LmChatGoogleGemini implements INodeType {
 		if (options.includeThoughts !== undefined) thinkingConfig.includeThoughts = options.includeThoughts;
 		const hasThinkingConfig = Object.keys(thinkingConfig).length > 0;
 
-		const model = new ChatGoogleGenerativeAI({
+		// Parse the optional response schema. The wrapper auto-sets
+		// responseMimeType: application/json whenever a schema is present, so the
+		// separate JSON Output toggle is unnecessary when this is set.
+		let responseSchema: Schema | undefined;
+		if (typeof options.responseSchema === 'string' && options.responseSchema.trim() !== '') {
+			try {
+				responseSchema = JSON.parse(options.responseSchema) as Schema;
+			} catch (error) {
+				throw new NodeOperationError(
+					this.getNode(),
+					`Invalid Response JSON Schema: ${(error as Error).message}`,
+				);
+			}
+		}
+
+		const fields = {
 			apiKey: credentials.apiKey as string,
 			baseUrl: credentials.host as string,
 			model: modelName,
@@ -441,7 +504,11 @@ export class LmChatGoogleGemini implements INodeType {
 			safetySettings,
 			...(hasThinkingConfig ? { thinkingConfig } : {}),
 			callbacks: [new N8nLlmTracing(this)],
-		});
+		};
+
+		const model = responseSchema
+			? new ChatGoogleGenerativeAIWithSchema(fields, responseSchema)
+			: new ChatGoogleGenerativeAI(fields);
 
 		return {
 			response: model,
