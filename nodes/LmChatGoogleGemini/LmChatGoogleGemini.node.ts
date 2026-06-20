@@ -3,8 +3,16 @@ import type {
 	GoogleGenerativeAIChatInput,
 	GoogleGenerativeAIChatCallOptions,
 } from '@intrvls/langchain-google-genai';
-import type { SafetySetting, Schema } from '@google/genai';
+import type {
+	SafetySetting,
+	Schema,
+	GenerateContentResponse,
+	GenerateContentParameters,
+} from '@google/genai';
 import { HarmBlockThreshold, HarmCategory } from '@google/genai';
+import type { ChatResult } from '@langchain/core/outputs';
+import type { BaseMessage } from '@langchain/core/messages';
+import type { CallbackManagerForLLMRun } from '@langchain/core/callbacks/manager';
 
 // The thinking types aren't exported from the library, so derive them from the
 // exported constructor-input interface to stay in sync with the upstream shape.
@@ -22,19 +30,27 @@ import {
 import { GeminiLlmTracing } from './GeminiLlmTracing';
 
 /**
- * Thin subclass that bakes a `responseSchema` into every request as a default
- * call option.
+ * Subclass that adds two capabilities the stock wrapper doesn't expose:
  *
- * `responseSchema` is only a per-call option upstream (not a constructor field),
- * so the usual `model.withConfig({ responseSchema })` returns a RunnableBinding
- * — which loses `.bindTools()` and therefore breaks tool-calling Agents. By
- * overriding `invocationParams` we keep the supplied object a real
- * `ChatGoogleGenerativeAI` (instanceof intact, `bindTools` available) while
- * still forwarding the schema on every call. A schema passed explicitly at call
- * time still wins over the default.
+ *  1. **Default `responseSchema`.** `responseSchema` is only a per-call option
+ *     upstream (not a constructor field), so `model.withConfig({ responseSchema })`
+ *     returns a RunnableBinding — which loses `.bindTools()` and breaks
+ *     tool-calling Agents. Overriding `invocationParams` keeps the supplied
+ *     object a real `ChatGoogleGenerativeAI` (instanceof intact, `bindTools`
+ *     available) while still forwarding the schema on every call. A schema
+ *     passed explicitly at call time still wins over the default.
+ *
+ *  2. **Raw API response.** The full `GenerateContentResponse` (with top-level
+ *     fields the per-candidate `generationInfo` omits — `modelVersion`,
+ *     `responseId`, `promptFeedback`, top-level `usageMetadata`) is only visible
+ *     inside `_generate`. We capture it in `completionWithRetry` and attach it to
+ *     each generation's `generationInfo.rawResponse` so it reaches the sub-node
+ *     output panel. Non-streaming only — streaming aggregates chunks and never
+ *     calls `completionWithRetry`, so `rawResponse` is omitted there.
  */
-class ChatGoogleGenerativeAIWithSchema extends ChatGoogleGenerativeAI {
+class ChatGoogleGenerativeAIWithMetadata extends ChatGoogleGenerativeAI {
 	private readonly defaultResponseSchema?: Schema;
+	private lastRawResponse?: GenerateContentResponse;
 
 	constructor(
 		fields: GoogleGenerativeAIChatInput & { apiKey?: string },
@@ -47,12 +63,39 @@ class ChatGoogleGenerativeAIWithSchema extends ChatGoogleGenerativeAI {
 	invocationParams(
 		options?: this['ParsedCallOptions'],
 	): ReturnType<ChatGoogleGenerativeAI['invocationParams']> {
+		if (!this.defaultResponseSchema) return super.invocationParams(options);
 		return super.invocationParams({
 			...(options as GoogleGenerativeAIChatCallOptions),
 			responseSchema:
 				(options as GoogleGenerativeAIChatCallOptions | undefined)?.responseSchema ??
 				this.defaultResponseSchema,
 		} as this['ParsedCallOptions']);
+	}
+
+	async completionWithRetry(
+		request: GenerateContentParameters,
+		options?: this['ParsedCallOptions'],
+	): Promise<GenerateContentResponse> {
+		const res = await super.completionWithRetry(request, options);
+		this.lastRawResponse = res;
+		return res;
+	}
+
+	async _generate(
+		messages: BaseMessage[],
+		options: this['ParsedCallOptions'],
+		runManager?: CallbackManagerForLLMRun,
+	): Promise<ChatResult> {
+		// Reset so a prior non-streaming call can't leak into a streaming one.
+		this.lastRawResponse = undefined;
+		const result = await super._generate(messages, options, runManager);
+		const raw = this.lastRawResponse;
+		if (raw) {
+			for (const generation of result.generations ?? []) {
+				generation.generationInfo = { ...generation.generationInfo, rawResponse: raw };
+			}
+		}
+		return result;
 	}
 }
 
@@ -506,9 +549,7 @@ export class LmChatGoogleGemini implements INodeType {
 			callbacks: [new GeminiLlmTracing(this)],
 		};
 
-		const model = responseSchema
-			? new ChatGoogleGenerativeAIWithSchema(fields, responseSchema)
-			: new ChatGoogleGenerativeAI(fields);
+		const model = new ChatGoogleGenerativeAIWithMetadata(fields, responseSchema);
 
 		return {
 			response: model,

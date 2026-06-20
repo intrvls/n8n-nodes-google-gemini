@@ -60,6 +60,9 @@ export class GeminiLlmTracing extends N8nLlmTracing {
 						...(existing.urlContextMetadata
 							? { urlContextMetadata: existing.urlContextMetadata }
 							: {}),
+						// Full raw GenerateContentResponse, attached by the model subclass
+						// (non-streaming calls only).
+						...(existing.rawResponse ? { rawResponse: existing.rawResponse } : {}),
 					},
 				};
 			}
