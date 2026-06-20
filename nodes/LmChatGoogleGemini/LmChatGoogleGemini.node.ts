@@ -19,7 +19,7 @@ import {
 	type SupplyData,
 	type INodeProperties,
 } from 'n8n-workflow';
-import { N8nLlmTracing } from '@n8n/ai-utilities';
+import { GeminiLlmTracing } from './GeminiLlmTracing';
 
 /**
  * Thin subclass that bakes a `responseSchema` into every request as a default
@@ -503,7 +503,7 @@ export class LmChatGoogleGemini implements INodeType {
 			json: options.json,
 			safetySettings,
 			...(hasThinkingConfig ? { thinkingConfig } : {}),
-			callbacks: [new N8nLlmTracing(this)],
+			callbacks: [new GeminiLlmTracing(this)],
 		};
 
 		const model = responseSchema
